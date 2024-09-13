@@ -1,69 +1,40 @@
-const express = require("express");
-const path = require("path");
-const dotenv = require("dotenv");
-const nodemailer = require("nodemailer");
-const cors = require("cors");
-const app = express();
-const hbs = require("nodemailer-express-handlebars");
+import "express-async-errors";
+import express from "express";
+import dotenv from "dotenv";
+import cors from "cors";
+import { sendNewMessage, getBaseRoute } from "./controllers/general.js";
+import {
+  errorHandler,
+  methodChecker,
+  requestLogger,
+  routeNotFound,
+} from "./middlewares/index.js";
+
 dotenv.config();
-const PORT = process.env.PORT || 5000;
+
+// Initialize an express app
+const app = express();
+
+// Env variables
+const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ extended: true}));
+app.use(express.json({ extended: true }));
 
-let transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  requireTLS: true,
-  auth: {
-    user: "philipowolabi79@gmail.com",
-    pass: process.env.SMTPPASS,
-  },
-});
+app.use(methodChecker); // Checks if the incoming request method is supported
+app.use(express.urlencoded({ extended: true })); // Parse urlencoded data in request body
+app.use(express.json({})); // Parse json data in request body
 
-let options = {
-  viewEngine: {
-    extName: ".handlebars",
-    partialsDir: path.resolve("./views"),
-    defaultLayout: false,
-  },
-  viewPath: path.resolve("./views"),
-  extName: ".handlebars",
-};
+app.use(requestLogger); // Log any incoming request to the console
 
-transporter.use("compile", hbs(options));
+app.get("/", getBaseRoute);
+app.post("/", sendNewMessage);
+
+// All route that are not handled from the top will be handled here
+app.all("*", routeNotFound); // Returns a 404 response for such routes
+app.use(errorHandler); // Handles all error in the app
 
 app.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);
-});
-
-app.post("/", (req, res) => {
-  console.log("New request", req.body)
-  const {subject, message} = req.body
-  let mailOptions = {
-    from: "philipowolabi79@gmail.com",
-    to: "philipowolabi79@gmail.com",
-    subject,
-    text: message,
-    template: "template",
-    context: {
-      body: req.body,
-    },
-  };
-
-  transporter.sendMail(mailOptions, function (err, info) {
-    if (err) {
-      console.log(err);
-      return res.json({
-        message: "An error occured, please try again.",
-        status: 500,
-      });
-    } else {
-      console.log("Email sent: " + info.response);
-      return res.json({
-        message: "Information submitted successfully.",
-        status: 200,
-      });
-    }
-  });
 });
